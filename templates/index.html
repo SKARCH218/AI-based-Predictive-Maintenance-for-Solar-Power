@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0b1220" />
+    <title>태양열 발전량 모니터링</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header-bar">
+            <h1>태양열 발전 모니터링</h1>
+            <div class="filters">
+                <label for="boardSelect">보드:</label>
+                <select id="boardSelect"></select>
+                <span class="status-wrap"><span id="status_badge" class="badge">-</span></span>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab-nav" role="tablist">
+                <button class="tab-link active" data-target="#tab-panels">패널</button>
+                <button class="tab-link" data-target="#tab-graph">그래프</button>
+                <button class="tab-link" data-target="#tab-prediction">예지보전</button>
+            </div>
+            <div class="tab-content">
+                <section id="tab-panels" class="tab-pane active">
+                    <h2>패널 배치(5 x 6) + 축별 최신값</h2>
+                    <div class="content-split">
+                        <div class="content-left">
+                            <div class="board">
+                                <div id="panelGrid" class="panel-grid"></div>
+                                <div id="rowLabels" class="row-labels"></div>
+                                <div id="colLabels" class="col-labels"></div>
+                            </div>
+                        </div>
+                        <aside class="content-right">
+                            <div class="data-display">
+                                <p><strong>Bus Voltage:</strong> <span id="busVoltage">N/A</span> V</p>
+                                <p><strong>Shunt Voltage:</strong> <span id="shuntVoltage">N/A</span> mV</p>
+                                <p><strong>Load Voltage:</strong> <span id="loadVoltage">N/A</span> V</p>
+                                <p><strong>Current:</strong> <span id="current_mA">N/A</span> mA</p>
+                                <p><strong>Power:</strong> <span id="power_mW">N/A</span> mW</p>
+                                <p><strong>누적 발전량:</strong> <span id="accumulatedEnergy_mWh">N/A</span> mWh</p>
+                                <p><strong>Last Update:</strong> <span id="last_updated">N/A</span></p>
+                            </div>
+                        </aside>
+                    </div>
+                </section>
+                <section id="tab-graph" class="tab-pane">
+                    <div class="chart-container">
+                        <canvas id="powerChart"></canvas>
+                    </div>
+                </section>
+                <section id="tab-prediction" class="tab-pane">
+                    <h2>CNN 기반 예지보전</h2>
+                    <div class="prediction-container">
+                        <!-- CNN 예측 결과 -->
+                        <div class="prediction-card">
+                            <h3>실시간 예측</h3>
+                            <div class="prediction-status">
+                                <div class="status-indicator" id="cnn-status-indicator">
+                                    <span class="status-label" id="cnn-status-label">분석 중...</span>
+                                    <span class="confidence-badge" id="cnn-confidence">-</span>
+                                </div>
+                                <div class="status-details">
+                                    <p><strong>모델 버전:</strong> <span id="cnn-model-version">-</span></p>
+                                    <p><strong>마지막 분석:</strong> <span id="cnn-last-update">-</span></p>
+                                    <p><strong>분석 대상:</strong> <span id="cnn-board-id">-</span></p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 패턴 시각화 -->
+                        <div class="prediction-card">
+                            <h3>시계열 패턴</h3>
+                            <div class="pattern-viz">
+                                <canvas id="patternCanvas" width="200" height="200"></canvas>
+                                <p class="pattern-desc">GAF/MTF 이미지 변환</p>
+                            </div>
+                        </div>
+
+                        <!-- 확신도 분포 -->
+                        <div class="prediction-card full-width">
+                            <h3>클래스별 확신도</h3>
+                            <div class="confidence-bars">
+                                <div class="conf-bar-item">
+                                    <label>NORMAL</label>
+                                    <div class="conf-bar">
+                                        <div class="conf-fill normal" id="conf-normal" style="width: 0%"></div>
+                                    </div>
+                                    <span class="conf-value" id="conf-normal-val">0%</span>
+                                </div>
+                                <div class="conf-bar-item">
+                                    <label>WARNING</label>
+                                    <div class="conf-bar">
+                                        <div class="conf-fill warning" id="conf-warning" style="width: 0%"></div>
+                                    </div>
+                                    <span class="conf-value" id="conf-warning-val">0%</span>
+                                </div>
+                                <div class="conf-bar-item">
+                                    <label>ALERT</label>
+                                    <div class="conf-bar">
+                                        <div class="conf-fill alert" id="conf-alert" style="width: 0%"></div>
+                                    </div>
+                                    <span class="conf-value" id="conf-alert-val">0%</span>
+                                </div>
+                                <div class="conf-bar-item">
+                                    <label>CRITICAL</label>
+                                    <div class="conf-bar">
+                                        <div class="conf-fill critical" id="conf-critical" style="width: 0%"></div>
+                                    </div>
+                                    <span class="conf-value" id="conf-critical-val">0%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 히스토리 차트 -->
+                        <div class="prediction-card full-width">
+                            <h3>예측 히스토리</h3>
+                            <div class="chart-container-small">
+                                <canvas id="predictionHistoryChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- 교체 날짜 예측 -->
+                        <div class="prediction-card full-width replacement-prediction">
+                            <h3>🔧 교체 예정 날짜</h3>
+                            <div class="replacement-info">
+                                <div class="replacement-main">
+                                    <div class="replacement-date-section">
+                                        <span class="replacement-label">예상 교체일</span>
+                                        <div class="replacement-date" id="replacement-date">계산 중...</div>
+                                        <span class="replacement-confidence" id="replacement-confidence">-</span>
+                                    </div>
+                                    <div class="replacement-details">
+                                        <div class="detail-row">
+                                            <span class="detail-label">현재 상태:</span>
+                                            <span class="detail-value" id="current-health-status">-</span>
+                                        </div>
+                                        <div class="detail-row">
+                                            <span class="detail-label">남은 일수:</span>
+                                            <span class="detail-value" id="days-remaining">-</span>
+                                        </div>
+                                        <div class="detail-row">
+                                            <span class="detail-label">위험도:</span>
+                                            <span class="detail-value" id="risk-level">-</span>
+                                        </div>
+                                        <div class="detail-row">
+                                            <span class="detail-label">열화 속도:</span>
+                                            <span class="detail-value" id="degradation-rate">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="replacement-chart">
+                                    <canvas id="replacementTrendChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 모델 성능 -->
+                        <div class="prediction-card full-width">
+                            <h3>모델 성능 지표</h3>
+                            <div class="model-metrics">
+                                <div class="metric-item">
+                                    <span class="metric-label">정확도</span>
+                                    <span class="metric-value" id="model-accuracy">-</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">F1 Score</span>
+                                    <span class="metric-value" id="model-f1">-</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">예측 샘플</span>
+                                    <span class="metric-value" id="model-samples">-</span>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">학습 데이터</span>
+                                    <span class="metric-value" id="model-training-size">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

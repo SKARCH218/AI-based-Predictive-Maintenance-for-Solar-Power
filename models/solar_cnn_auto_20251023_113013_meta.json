@@ -1,0 +1,6 @@
+{
+  "source_checkpoint": "checkpoints/best_epoch5.pth",
+  "converted_at": "2025-10-23T11:30:13.677018",
+  "version": "auto_20251023_113013",
+  "model_class": "SolarPanelCNN"
+}
